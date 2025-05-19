@@ -1,0 +1,21 @@
+# Ignore Unity project files (this is a package, not a full Unity project)
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+.vscode/
+.idea/
+
+# Ignore meta files (optional if you want to keep the repo clean for UPM)
+*.meta
+
+# Ignore auto-generated IDE files
+*.csproj
+*.sln
+*.user
+*.unityproj
+*.DS_Store
+# Ignore package manager locks
+packages-lock.json
