@@ -1,0 +1,26 @@
+{
+  "name": "com.xvparys.recognx",
+  "version": "1.0.0",
+  "displayName": "RecognX",
+  "description": "A Unity package for object recognition, 3D localization, and instruction tracking using YOLO and AR mesh raycasting.",
+  "unity": "6000.0.40f1",
+  "author": {
+    "name": "Xander Vanparys",
+    "email": "xander.vanparys@gmail.com",
+    "url": "https://github.com/xandervanparys"
+  },
+  "keywords": [
+"RecognX",
+"AR",
+    "VisionPro",
+    "Unity",
+    "ObjectDetection",
+    "Localization",
+    "InstructionTracking",
+    "YOLO",
+    "XR",
+    "ARKit"
+  ],
+  "type": "library",
+  "dependencies": {}
+}
