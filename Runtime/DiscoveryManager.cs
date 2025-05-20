@@ -8,6 +8,7 @@ using UnityEngine.XR.ARSubsystems;
 using TMPro;
 using Newtonsoft.Json.Linq;
 
+
 namespace RecognX
 {
     public class DiscoveryManager : MonoBehaviour
@@ -16,7 +17,11 @@ namespace RecognX
 
         [Header("Dependencies")]
         [SerializeField] private ARCameraManager arCameraManager;
+
+        [SerializeField] private ARMeshManager arMeshManager;
+
         [SerializeField] private Camera arCamera;
+
         [SerializeField] private GameObject labelPrefab;
         [SerializeField] private string backendUrl = "https://api.web-present.be/yolo/detect_bottle_and_cellphone/";
 
@@ -36,6 +41,7 @@ namespace RecognX
                 Destroy(gameObject);
             else
                 Instance = this;
+            AssignARMeshLayer();
         }
 
         public void Capture()
@@ -149,6 +155,29 @@ namespace RecognX
             lr.material = new Material(Shader.Find("Sprites/Default"));
             lr.startColor = lr.endColor = Color.magenta;
             Destroy(go, 5f);
+        }
+
+        private void AssignARMeshLayer()
+        {
+            int arMeshLayer = LayerMask.NameToLayer("ARMesh");
+
+            if (arMeshLayer == -1)
+            {
+                Debug.LogWarning("⚠️ ARMesh layer not defined. Using Default layer for mesh raycasts.");
+                arMeshLayer = 0; // Default layer
+            }
+            
+            if (arMeshManager == null)
+            {
+                Debug.LogWarning("ARMeshManager not assigned to DiscoveryManager.");
+                return;
+            }
+
+            arMeshManager.meshesChanged += args =>
+            {
+                foreach (var mesh in args.added)
+                    mesh.gameObject.layer = arMeshLayer;
+            };
         }
     }
 }

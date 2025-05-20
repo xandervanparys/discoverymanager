@@ -22,5 +22,6 @@
     "ARKit"
   ],
   "type": "library",
-  "dependencies": {}
+  "dependencies": {},
+  "rootNamespace": "RecognX"
 }
