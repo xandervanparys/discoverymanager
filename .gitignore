@@ -9,7 +9,6 @@
 .idea/
 
 # Ignore meta files (optional if you want to keep the repo clean for UPM)
-*.meta
 
 # Ignore auto-generated IDE files
 *.csproj
