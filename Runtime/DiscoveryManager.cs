@@ -22,13 +22,16 @@ namespace RecognX
 
         [SerializeField] private Camera arCamera;
 
-        [SerializeField] private GameObject labelPrefab;
-        [SerializeField] private string backendUrl = "https://api.web-present.be/yolo/detect_bottle_and_cellphone/";
 
         [Header("Debug Visualization")]
         [SerializeField] private bool showRays = false;
-        [SerializeField] private bool showLabels = true;
+        [SerializeField] private bool showLabels = false;
         [SerializeField] private float rayLength = 8f;
+
+        private readonly string backendUrl = "https://api.web-present.be/yolo/detect_bottle_and_cellphone/";
+        
+        private GameObject labelPrefab;
+        private GameObject labelContainer;
 
         public Action<List<LocalizedObject>> OnObjectsLocalized;
 
@@ -41,6 +44,17 @@ namespace RecognX
                 Destroy(gameObject);
             else
                 Instance = this;
+
+            if (showLabels)
+            {
+                labelContainer = new GameObject("RecognX_Labels");
+                labelPrefab = Resources.Load<GameObject>("Label3D");
+                if (labelPrefab == null)
+                {
+                    Debug.LogWarning("Could not load LabelPrefab from Resources");
+                }
+            }
+            
             AssignARMeshLayer();
         }
 
@@ -136,6 +150,7 @@ namespace RecognX
                         GameObject labelObj = Instantiate(labelPrefab, hit.point, Quaternion.identity);
                         var text = labelObj.GetComponentInChildren<TextMeshPro>();
                         if (text != null) text.text = label;
+                        labelObj.transform.SetParent(labelContainer.transform, false);
                     }
                     results.Add(new LocalizedObject(label, hit.point));
                 }
@@ -164,7 +179,7 @@ namespace RecognX
             if (arMeshLayer == -1)
             {
                 Debug.LogWarning("⚠️ ARMesh layer not defined. Using Default layer for mesh raycasts.");
-                arMeshLayer = 0; // Default layer
+                arMeshLayer = 0;
             }
             
             if (arMeshManager == null)
@@ -178,6 +193,14 @@ namespace RecognX
                 foreach (var mesh in args.added)
                     mesh.gameObject.layer = arMeshLayer;
             };
+        }
+        
+        public void ClearLabels()
+        {
+            if (labelContainer != null)
+                Destroy(labelContainer);
+
+            labelContainer = new GameObject("RecognX_Labels");
         }
     }
 }
