@@ -55,6 +55,37 @@ namespace RecognX
             return JsonUtility.FromJson<SetupResponse>(www.downloadHandler.text);
         }
 
+        public async Task<List<YoloDetection>> DetectObjectsAsync(Texture2D image, List<int> yoloClassIds)
+        {
+            // TODO: create the endpoint on my backend matching these datamodels
+            byte[] imageBytes = image.EncodeToJPG();
+
+            WWWForm form = new WWWForm();
+            form.AddBinaryData("file", imageBytes, "capture.jpg", "image/jpeg");
+
+            foreach (int id in yoloClassIds)
+            {
+                form.AddField("yolo_ids[]", id);
+            }
+
+            using UnityWebRequest www = UnityWebRequest.Post($"{BaseUrl}/instruction/detect/", form);
+            www.downloadHandler = new DownloadHandlerBuffer();
+
+            var operation = www.SendWebRequest();
+            while (!operation.isDone)
+                await Task.Yield();
+
+            if (www.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogError($"❌ DetectObjects failed: {www.error}");
+                return new List<YoloDetection>();
+            }
+
+            string json = "{\"objects\":" + www.downloadHandler.text + "}";
+            var wrapped = JsonUtility.FromJson<DetectionResponse>(json);
+            return wrapped.objects;
+        }
+
         private static string GetOrCreateUserId()
         {
             const string key = "user_id";

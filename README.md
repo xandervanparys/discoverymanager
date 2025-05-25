@@ -29,6 +29,18 @@ https://github.com/xandervanparys/recogx.git
 
 ---
 
+### Required Layer Configuration
+
+To ensure accurate object localization, please create a layer named `ARMesh`:
+
+1. Open `Edit > Project Settings > Tags and Layers`
+2. Scroll to an empty layer slot (e.g., User Layer 8)
+3. Name it `ARMesh`
+
+The RecognX package will automatically assign the AR mesh to this layer for raycasting.
+
+---
+
 ## 💠 Usage
 
 1. Add the `DiscoveryManager` component to any GameObject.

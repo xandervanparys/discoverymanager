@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace RecognX
@@ -7,11 +8,13 @@ namespace RecognX
     [Serializable]
     public struct LocalizedObject
     {
-        public string className;
+        public string label;
+        public int yoloId;
         public Vector3 position;
-        public LocalizedObject(string name, Vector3 pos)
+        public LocalizedObject(string name, int yoloId, Vector3 pos)
         {
-            className = name;
+            label = name;
+            this.yoloId = yoloId;
             position = pos;
         }
     }
@@ -63,5 +66,20 @@ namespace RecognX
     public class TaskListWrapper
     {
         public TaskResponse[] tasks;
+    }
+    
+    [System.Serializable]
+    public class YoloDetection
+    {
+        public string class_name;
+        public int yoloId;
+        public float confidence;    
+        public float[] bounding_box;
+    }
+    
+    [System.Serializable]
+    public class DetectionResponse
+    {
+        public List<YoloDetection> objects;
     }
 }
