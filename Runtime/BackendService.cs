@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using PlasticPipe.PlasticProtocol.Messages;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -57,7 +58,6 @@ namespace RecognX
 
         public async Task<List<YoloDetection>> DetectObjectsAsync(Texture2D image, List<int> yoloClassIds)
         {
-            // TODO: create the endpoint on my backend matching these datamodels
             byte[] imageBytes = image.EncodeToJPG();
 
             WWWForm form = new WWWForm();
@@ -68,7 +68,7 @@ namespace RecognX
                 form.AddField("yolo_ids[]", id);
             }
 
-            using UnityWebRequest www = UnityWebRequest.Post($"{BaseUrl}/instruction/detect/", form);
+            using UnityWebRequest www = UnityWebRequest.Post($"{BaseUrl}/instruction/detect_filtered/", form);
             www.downloadHandler = new DownloadHandlerBuffer();
 
             var operation = www.SendWebRequest();
@@ -84,6 +84,28 @@ namespace RecognX
             string json = "{\"objects\":" + www.downloadHandler.text + "}";
             var wrapped = JsonUtility.FromJson<DetectionResponse>(json);
             return wrapped.objects;
+        }
+
+        public async Task<InstructionTrackingResponse> SubmitLiveFrameAsync(Texture2D image)
+        {
+            byte[] imageBytes = image.EncodeToJPG();
+            WWWForm form = new();
+            form.AddBinaryData("file", imageBytes, "track.jpg", "image/jpeg");
+            form.AddField("user_id", GetOrCreateUserId());
+            using UnityWebRequest www = UnityWebRequest.Post($"{BaseUrl}/instruction/track/", form);
+            www.downloadHandler = new DownloadHandlerBuffer();
+
+            var operation = www.SendWebRequest();
+            while (!operation.isDone)
+                await Task.Yield();
+
+            if (www.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogError($"Live tracking + feedback failed: {www.error}");
+                return new InstructionTrackingResponse();
+            }
+
+            return JsonUtility.FromJson<InstructionTrackingResponse>(www.downloadHandler.text);
         }
 
         private static string GetOrCreateUserId()

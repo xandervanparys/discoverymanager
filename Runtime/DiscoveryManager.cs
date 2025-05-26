@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.XR.ARFoundation;
@@ -15,23 +16,21 @@ namespace RecognX
 {
     public class DiscoveryManager
     {
-        private ARCameraManager arCameraManager;
+        private static ARCameraManager arCameraManager;
 
         private ARMeshManager arMeshManager;
 
         private Camera arCamera;
 
         private BackendService backendService;
-        
-        private GameObject labelPrefab;
-        private GameObject labelContainer;
 
         public Action<List<LocalizedObject>> OnObjectsLocalized;
 
         private Vector3 cameraPosAtCapture;
         private Quaternion cameraRotAtCapture;
 
-        public void Initialize(ARCameraManager cameraManager, ARMeshManager meshManager, Camera unityCamera, BackendService backend)
+        public DiscoveryManager(ARCameraManager cameraManager, ARMeshManager meshManager, Camera unityCamera,
+            BackendService backend)
         {
             arCameraManager = cameraManager;
             arMeshManager = meshManager;
@@ -49,28 +48,9 @@ namespace RecognX
 
         public async void LocateObjects(List<int> activeYoloIds)
         {
-            if (arCameraManager == null || !arCameraManager.TryAcquireLatestCpuImage(out XRCpuImage image))
-                return;
-
+            Texture2D tex = CaptureCameraTextureAsync();
             cameraPosAtCapture = arCamera.transform.position;
             cameraRotAtCapture = arCamera.transform.rotation;
-
-            var conversionParams = new XRCpuImage.ConversionParams
-            {
-                inputRect = new RectInt(0, 0, image.width, image.height),
-                outputDimensions = new Vector2Int(image.width, image.height),
-                outputFormat = TextureFormat.RGB24,
-                transformation = XRCpuImage.Transformation.None
-            };
-
-            var rawTextureData = new NativeArray<byte>(image.GetConvertedDataSize(conversionParams), Allocator.Temp);
-            image.Convert(conversionParams, rawTextureData);
-            image.Dispose();
-
-            Texture2D tex = new Texture2D(conversionParams.outputDimensions.x, conversionParams.outputDimensions.y, TextureFormat.RGB24, false);
-            tex.LoadRawTextureData(rawTextureData);
-            tex.Apply();
-            rawTextureData.Dispose();
 
             List<YoloDetection> detections = await backendService.DetectObjectsAsync(tex, activeYoloIds);
             HandleDetections(detections, tex.width, tex.height);
@@ -127,6 +107,31 @@ namespace RecognX
                 foreach (var mesh in args.added)
                     mesh.gameObject.layer = arMeshLayer;
             };
+        }
+
+        public static Texture2D CaptureCameraTextureAsync()
+        {
+            if (arCameraManager == null || !arCameraManager.TryAcquireLatestCpuImage(out XRCpuImage image))
+                return null;
+
+            var conversionParams = new XRCpuImage.ConversionParams
+            {
+                inputRect = new RectInt(0, 0, image.width, image.height),
+                outputDimensions = new Vector2Int(image.width, image.height),
+                outputFormat = TextureFormat.RGB24,
+                transformation = XRCpuImage.Transformation.None
+            };
+
+            int size = image.GetConvertedDataSize(conversionParams);
+            using var rawTextureData = new NativeArray<byte>(size, Allocator.Temp);
+            image.Convert(conversionParams, rawTextureData);
+            image.Dispose();
+
+            var tex = new Texture2D(conversionParams.outputDimensions.x, conversionParams.outputDimensions.y, TextureFormat.RGB24, false);
+            tex.LoadRawTextureData(rawTextureData);
+            tex.Apply();
+
+            return tex;
         }
         
     }

@@ -11,12 +11,21 @@ namespace RecognX
         private readonly Dictionary<int, int> requiredYoloCounts = new();
         private readonly Dictionary<int, List<LocalizedObject>> locatedObjects = new();
 
+        private int currentStepIndex = 0;
+        private readonly HashSet<int> completedSteps = new();
+
+        public int CurrentStepIndex => currentStepIndex;
+
+        public IReadOnlyCollection<int> CompletedSteps => completedSteps;
+
         public void StartSession(TaskResponse task)
         {
             CurrentTask = task;
 
             requiredYoloCounts.Clear();
             locatedObjects.Clear();
+            currentStepIndex = 0;
+            completedSteps.Clear();
 
             foreach (var obj in task.objects)
             {
@@ -48,9 +57,10 @@ namespace RecognX
                 return false;
 
             locatedObjects[yoloId].Add(obj);
-            
+
             return true;
         }
+
         public List<int> GetYoloIdsToFind()
         {
             HashSet<int> toFind = new();
@@ -87,6 +97,29 @@ namespace RecognX
         public List<LocalizedObject> getFoundObjectsAsList()
         {
             return locatedObjects.Values.SelectMany(list => list).ToList();
+        }
+
+        public void AdvanceStep()
+        {
+            completedSteps.Add(currentStepIndex);
+            currentStepIndex++;
+        }
+
+        public Step GetCurrentStep()
+        {
+            if (CurrentTask != null && currentStepIndex < CurrentTask.steps.Length)
+                return CurrentTask.steps[currentStepIndex];
+
+            return null;
+        }
+        
+        public List<LocalizedObject> GetLocalizedObjectsForCurrentStep()
+        {
+            var relevantIds = GetCurrentStep().relevant_objects.Select(o => o.yolo_class_id).ToHashSet();
+            return locatedObjects
+                .Where(kvp => relevantIds.Contains(kvp.Key))
+                .SelectMany(kvp => kvp.Value)
+                .ToList();
         }
     }
 }

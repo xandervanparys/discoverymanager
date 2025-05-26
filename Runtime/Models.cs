@@ -61,7 +61,17 @@ namespace RecognX
         public string yolo_name;
         public int yolo_class_id;
     }
-
+    
+    [Serializable]
+    public class InstructionTrackingResponse {
+        public string response;
+        public int step_number;
+        public bool step_completed;
+        public bool task_completed;
+        public float open_ai_time;
+        public TokenUsage token_usage;
+    }
+    
     [Serializable]
     public class TaskListWrapper
     {

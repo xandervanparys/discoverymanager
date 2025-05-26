@@ -1,14 +1,30 @@
+using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 
 namespace RecognX
 {
+    public enum TaskState
+    {
+        Idle,
+        LocatingObjects,
+        ReadyToTrack,
+        Tracking,
+        Completed
+    }
+
     public class ARInstructionManager : MonoBehaviour
     {
         public static ARInstructionManager Instance { get; private set; }
+
+        public event Action<List<TaskResponse>> OnTasksLoaded;
+        public event Action<InstructionTrackingResponse> OnInstructionFeedback;
+        public event Action<List<LocalizedObject>> OnRelevantObjectsUpdated;
+
+        public TaskState CurrentState => currentState;
+        public event Action<TaskState> OnTaskStateChanged;
 
         [Header("AR Dependencies")] [SerializeField]
         private ARCameraManager arCameraManager;
@@ -16,21 +32,29 @@ namespace RecognX
         [SerializeField] private ARMeshManager arMeshManager;
         [SerializeField] private Camera arCamera;
 
-        [Header("Visualizations")] [SerializeField]
-        private bool showRays = false;
-
-        [SerializeField] private bool showLabels = false;
+        [Header("Visualizations")]
+        [SerializeField] private bool useBuiltInLabelRenderer = false;
+        [SerializeField] private bool showRays = false;
         [SerializeField] private float rayLength = 8f;
 
         [Header("Object Labeling")] [SerializeField]
         private GameObject labelPrefab;
 
-        [SerializeField] private GameObject labelContainer;
+        private GameObject labelContainer;
 
         private BackendService backendService;
         private SessionManager sessionManager;
-        private TaskController taskController;
         private DiscoveryManager discoveryManager;
+
+        private TaskState currentState = TaskState.Idle;
+
+        private void SetState(TaskState newState)
+        {
+            if (currentState == newState) return;
+            currentState = newState;
+            Debug.Log($"[RecognX] State changed to: {newState}");
+            OnTaskStateChanged?.Invoke(currentState);
+        }
 
         private void Awake()
         {
@@ -41,26 +65,20 @@ namespace RecognX
             }
 
             Instance = this;
-
-            // You’ll wire up the rest of the logic here later
         }
 
         private async void Start()
         {
             Debug.Log("ARInstructionManager running.");
+            SetState(TaskState.Idle);
             backendService = new BackendService();
-            var tasks = await backendService.FetchAllTasksAsync();
-            foreach (var task in tasks)
-                Debug.Log($"✅ Task: {task.title} ({task.id})");
+            LoadTasks();
 
             sessionManager = new SessionManager();
-            taskController = new TaskController(backendService, sessionManager);
-
-            discoveryManager = new DiscoveryManager();
-            discoveryManager.Initialize(arCameraManager, arMeshManager, arCamera, backendService);
+            discoveryManager = new DiscoveryManager(arCameraManager, arMeshManager, arCamera, backendService);
             discoveryManager.OnObjectsLocalized += HandleObjectsLocalized;
 
-            if (showLabels)
+            if (useBuiltInLabelRenderer)
             {
                 labelContainer = new GameObject("RecognX_Labels");
                 labelPrefab = Resources.Load<GameObject>("Label3D");
@@ -73,11 +91,22 @@ namespace RecognX
             // await SelectTaskAsync("da676f65-307e-4137-9bf8-7f3179ad3743");
         }
 
+        private async void LoadTasks()
+        {
+            var tasks = await backendService.FetchAllTasksAsync();
+            foreach (var task in tasks)
+                Debug.Log($"✅ Task: {task.title} ({task.id})");
+            OnTasksLoaded?.Invoke(tasks);
+        }
+
         public async Task SelectTaskAsync(string taskId)
         {
-            var setup = await taskController.SelectTaskAsync(taskId);
+            var setup = await backendService.SubmitTaskAsync(taskId);
+            sessionManager.StartSession(setup.task);
             Debug.Log(
                 $"🎯 Task selected: {setup.task.title}, GPT ack: {setup.acknowledgment}, SessionManagerCheck: {sessionManager.CurrentTask.title}");
+
+            SetState(TaskState.LocatingObjects);
         }
 
         public void CaptureAndLocalize()
@@ -91,12 +120,8 @@ namespace RecognX
             foreach (var obj in objects)
             {
                 bool shouldShow = sessionManager.MarkYoloObjectFound(obj);
-
-                if (!showLabels || !shouldShow) continue;
-                GameObject label = Instantiate(labelPrefab, obj.position, Quaternion.identity);
-                var text = label.GetComponentInChildren<TMPro.TextMeshPro>();
-                if (text != null) text.text = obj.label;
-                label.transform.SetParent(labelContainer.transform, false);
+                if (!useBuiltInLabelRenderer || !shouldShow) continue;
+                placeLabel(obj);
             }
         }
 
@@ -106,6 +131,55 @@ namespace RecognX
                 Destroy(labelContainer);
 
             labelContainer = new GameObject("RecognX_Labels");
+        }
+
+        public async Task TrackStepAsync()
+        {
+            var cameraTexture = DiscoveryManager.CaptureCameraTextureAsync();
+            var response = await backendService.SubmitLiveFrameAsync(cameraTexture);
+
+            Debug.Log($"📩 GPT Feedback: {response.response}");
+            Debug.Log(
+                $"🧭 Step: {response.step_number} | ✅ Completed: {response.step_completed} | 🎯 Task Done: {response.task_completed}");
+
+            if (response.step_completed)
+            {
+                sessionManager.AdvanceStep();
+                if (useBuiltInLabelRenderer && !response.task_completed)
+                {
+                    ClearLabels();
+                    var relevantObjects = sessionManager.GetLocalizedObjectsForCurrentStep();
+                    foreach (var obj in relevantObjects)
+                    {
+                        placeLabel(obj);
+                    }
+                }
+            }
+
+            if (response.task_completed)
+            {
+                SetState(TaskState.Completed);
+            }
+            else if (response.step_completed)
+            {
+                SetState(TaskState.Tracking);
+            }
+
+            OnInstructionFeedback?.Invoke(response);
+            OnRelevantObjectsUpdated?.Invoke(sessionManager.GetLocalizedObjectsForCurrentStep());
+        }
+
+        public List<LocalizedObject> GetCurrentRelevantLocalizedObjects()
+        {
+            return sessionManager.GetLocalizedObjectsForCurrentStep();
+        }
+
+        private void placeLabel(LocalizedObject obj)
+        {
+            GameObject label = Instantiate(labelPrefab, obj.position, Quaternion.identity);
+            var text = label.GetComponentInChildren<TMPro.TextMeshPro>();
+            if (text != null) text.text = obj.label;
+            label.transform.SetParent(labelContainer.transform, false);
         }
     }
 }
