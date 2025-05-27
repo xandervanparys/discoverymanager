@@ -115,7 +115,10 @@ namespace RecognX
         
         public List<LocalizedObject> GetLocalizedObjectsForCurrentStep()
         {
-            var relevantIds = GetCurrentStep().relevant_objects.Select(o => o.yolo_class_id).ToHashSet();
+            var step = GetCurrentStep();
+            if (step == null) return new List<LocalizedObject>();
+
+            var relevantIds = step.relevant_objects.Select(o => o.yolo_class_id).ToHashSet();
             return locatedObjects
                 .Where(kvp => relevantIds.Contains(kvp.Key))
                 .SelectMany(kvp => kvp.Value)

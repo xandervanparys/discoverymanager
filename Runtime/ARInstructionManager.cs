@@ -39,7 +39,7 @@ namespace RecognX
 
         [Header("Visualizations")] [SerializeField]
         private bool useBuiltInLabelRenderer = false;
-        
+
         [Header("Object Labeling")] [SerializeField]
         private GameObject labelPrefab;
 
@@ -63,7 +63,7 @@ namespace RecognX
         {
             SetState(TaskState.ReadyToTrack);
             Debug.Log($"[RecognX] State changed to: {CurrentState}");
-            
+
             UpdateLabelsForCurrentStep();
             OnStepProgressUpdated?.Invoke(sessionManager.GetStepProgress());
         }
@@ -195,7 +195,6 @@ namespace RecognX
             {
                 sessionManager.AdvanceStep();
                 UpdateLabelsForCurrentStep();
-                OnStepProgressUpdated?.Invoke(sessionManager.GetStepProgress());
             }
 
             if (response.task_completed)
@@ -209,6 +208,7 @@ namespace RecognX
 
             OnInstructionFeedback?.Invoke(response);
             OnRelevantObjectsUpdated?.Invoke(sessionManager.GetLocalizedObjectsForCurrentStep());
+            OnStepProgressUpdated?.Invoke(sessionManager.GetStepProgress());
         }
 
         public List<LocalizedObject> GetCurrentRelevantLocalizedObjects()
