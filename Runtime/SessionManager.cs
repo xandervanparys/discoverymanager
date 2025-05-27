@@ -121,5 +121,26 @@ namespace RecognX
                 .SelectMany(kvp => kvp.Value)
                 .ToList();
         }
+
+        public int GetRequiredCount(int yoloId)
+        {
+            return requiredYoloCounts.TryGetValue(yoloId, out var count) ? count : 0;
+        }
+
+        public int GetFoundCount(int yoloId)
+        {
+            return locatedObjects.TryGetValue(yoloId, out var list) ? list.Count : 0;
+        }
+
+        public List<(int stepId, string description, bool completed)> GetStepProgress()
+        {
+            return CurrentTask.steps
+                .Select(step => (
+                    step.id,
+                    step.description,
+                    completed: completedSteps.Contains(step.id)
+                ))
+                .ToList();
+        }
     }
 }

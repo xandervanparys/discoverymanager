@@ -23,6 +23,11 @@ namespace RecognX
         public event Action<InstructionTrackingResponse> OnInstructionFeedback;
         public event Action<List<LocalizedObject>> OnRelevantObjectsUpdated;
 
+        public event Action<Dictionary<int, (string label, int requiredCount, int foundCount)>>
+            OnLocalizationProgressUpdated;
+
+        public event Action<List<(int stepId, string description, bool completed)>> OnStepProgressUpdated;
+
         public TaskState CurrentState => currentState;
         public event Action<TaskState> OnTaskStateChanged;
 
@@ -32,11 +37,9 @@ namespace RecognX
         [SerializeField] private ARMeshManager arMeshManager;
         [SerializeField] private Camera arCamera;
 
-        [Header("Visualizations")]
-        [SerializeField] private bool useBuiltInLabelRenderer = false;
-        [SerializeField] private bool showRays = false;
-        [SerializeField] private float rayLength = 8f;
-
+        [Header("Visualizations")] [SerializeField]
+        private bool useBuiltInLabelRenderer = false;
+        
         [Header("Object Labeling")] [SerializeField]
         private GameObject labelPrefab;
 
@@ -56,6 +59,15 @@ namespace RecognX
             OnTaskStateChanged?.Invoke(currentState);
         }
 
+        public void startTracking()
+        {
+            SetState(TaskState.ReadyToTrack);
+            Debug.Log($"[RecognX] State changed to: {CurrentState}");
+            
+            UpdateLabelsForCurrentStep();
+            OnStepProgressUpdated?.Invoke(sessionManager.GetStepProgress());
+        }
+
         private void Awake()
         {
             if (Instance != null && Instance != this)
@@ -67,7 +79,7 @@ namespace RecognX
             Instance = this;
         }
 
-        private async void Start()
+        private void Start()
         {
             Debug.Log("ARInstructionManager running.");
             SetState(TaskState.Idle);
@@ -107,6 +119,25 @@ namespace RecognX
                 $"🎯 Task selected: {setup.task.title}, GPT ack: {setup.acknowledgment}, SessionManagerCheck: {sessionManager.CurrentTask.title}");
 
             SetState(TaskState.LocatingObjects);
+            EmitLocalizationProgress();
+        }
+
+        private void EmitLocalizationProgress()
+        {
+            var summary = new Dictionary<int, (string, int, int)>();
+            foreach (var obj in sessionManager.CurrentTask.objects)
+            {
+                int yoloId = obj.yolo_class_id;
+                if (!summary.ContainsKey(yoloId))
+                {
+                    string label = obj.step_name;
+                    int required = sessionManager.GetRequiredCount(yoloId);
+                    int found = sessionManager.GetFoundCount(yoloId);
+                    summary[yoloId] = (label, required, found);
+                }
+            }
+
+            OnLocalizationProgressUpdated?.Invoke(summary);
         }
 
         public void CaptureAndLocalize()
@@ -117,11 +148,29 @@ namespace RecognX
 
         private void HandleObjectsLocalized(List<LocalizedObject> objects)
         {
+            Debug.Log($"I got here 0");
             foreach (var obj in objects)
             {
+                Debug.Log($"🔍 Evaluating object: {obj.label} (YOLO ID: {obj.yoloId})");
+
                 bool shouldShow = sessionManager.MarkYoloObjectFound(obj);
+                Debug.Log($"✅ Marked object found: {shouldShow}");
+
+                if (!useBuiltInLabelRenderer)
+                {
+                    Debug.Log("⚠️ Label rendering is disabled (useBuiltInLabelRenderer == false)");
+                }
+
+                if (!shouldShow)
+                {
+                    Debug.Log("⚠️ Object already fully found, skipping label placement");
+                }
+
                 if (!useBuiltInLabelRenderer || !shouldShow) continue;
+
+                Debug.Log("🏷 Placing label...");
                 placeLabel(obj);
+                EmitLocalizationProgress();
             }
         }
 
@@ -145,15 +194,8 @@ namespace RecognX
             if (response.step_completed)
             {
                 sessionManager.AdvanceStep();
-                if (useBuiltInLabelRenderer && !response.task_completed)
-                {
-                    ClearLabels();
-                    var relevantObjects = sessionManager.GetLocalizedObjectsForCurrentStep();
-                    foreach (var obj in relevantObjects)
-                    {
-                        placeLabel(obj);
-                    }
-                }
+                UpdateLabelsForCurrentStep();
+                OnStepProgressUpdated?.Invoke(sessionManager.GetStepProgress());
             }
 
             if (response.task_completed)
@@ -179,7 +221,26 @@ namespace RecognX
             GameObject label = Instantiate(labelPrefab, obj.position, Quaternion.identity);
             var text = label.GetComponentInChildren<TMPro.TextMeshPro>();
             if (text != null) text.text = obj.label;
-            label.transform.SetParent(labelContainer.transform, false);
+            label.transform.SetParent(labelContainer.transform, true);
+        }
+
+        private void UpdateLabelsForCurrentStep()
+        {
+            if (!useBuiltInLabelRenderer) return;
+
+            ClearLabels();
+            var relevantObjects = sessionManager.GetLocalizedObjectsForCurrentStep();
+            foreach (var obj in relevantObjects)
+            {
+                placeLabel(obj);
+            }
+        }
+
+        public void ResetToTaskSelection()
+        {
+            sessionManager.Reset();
+            ClearLabels();
+            SetState(TaskState.Idle);
         }
     }
 }

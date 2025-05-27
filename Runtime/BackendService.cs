@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using PlasticPipe.PlasticProtocol.Messages;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -65,10 +64,10 @@ namespace RecognX
 
             foreach (int id in yoloClassIds)
             {
-                form.AddField("yolo_ids[]", id);
+                form.AddField("yolo_ids", id);
             }
 
-            using UnityWebRequest www = UnityWebRequest.Post($"{BaseUrl}/instruction/detect_filtered/", form);
+            using UnityWebRequest www = UnityWebRequest.Post($"{BaseUrl}/yolo/detect_filtered/", form);
             www.downloadHandler = new DownloadHandlerBuffer();
 
             var operation = www.SendWebRequest();
@@ -83,6 +82,7 @@ namespace RecognX
 
             string json = "{\"objects\":" + www.downloadHandler.text + "}";
             var wrapped = JsonUtility.FromJson<DetectionResponse>(json);
+            Debug.Log($"raw response: {json}");
             return wrapped.objects;
         }
 
@@ -90,7 +90,7 @@ namespace RecognX
         {
             byte[] imageBytes = image.EncodeToJPG();
             WWWForm form = new();
-            form.AddBinaryData("file", imageBytes, "track.jpg", "image/jpeg");
+            form.AddBinaryData("frame", imageBytes, "track.jpg", "image/jpeg");
             form.AddField("user_id", GetOrCreateUserId());
             using UnityWebRequest www = UnityWebRequest.Post($"{BaseUrl}/instruction/track/", form);
             www.downloadHandler = new DownloadHandlerBuffer();
