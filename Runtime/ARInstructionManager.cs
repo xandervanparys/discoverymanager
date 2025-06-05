@@ -9,8 +9,7 @@ namespace RecognX
     public enum TaskState
     {
         Idle,
-        LocatingObjects,
-        ReadyToTrack,
+        TaskSummary,
         Tracking,
         Completed
     }
@@ -61,7 +60,7 @@ namespace RecognX
 
         public void startTracking()
         {
-            SetState(TaskState.ReadyToTrack);
+            SetState(TaskState.Tracking);
             Debug.Log($"[RecognX] State changed to: {CurrentState}");
 
             UpdateLabelsForCurrentStep();
@@ -118,7 +117,7 @@ namespace RecognX
             Debug.Log(
                 $"🎯 Task selected: {setup.task.title}, GPT ack: {setup.acknowledgment}, SessionManagerCheck: {sessionManager.CurrentTask.title}");
 
-            SetState(TaskState.LocatingObjects);
+            SetState(TaskState.TaskSummary);
             EmitLocalizationProgress();
         }
 
@@ -173,6 +172,28 @@ namespace RecognX
                 EmitLocalizationProgress();
             }
         }
+        
+        public Dictionary<int, (string label, int required, int found)> GetAllObjectsForCurrentTask()
+        {
+            var summary = new Dictionary<int, (string label, int required, int found)>();
+            foreach (var obj in sessionManager.CurrentTask.objects)
+            {
+                int yoloId = obj.yolo_class_id;
+                if (!summary.ContainsKey(yoloId))
+                {
+                    string label = obj.step_name;
+                    int required = sessionManager.GetRequiredCount(yoloId);
+                    int found = sessionManager.GetFoundCount(yoloId);
+                    summary[yoloId] = (label, required, found);
+                }
+            }
+            return summary;
+        }
+        
+        public List<(int stepId, string description, bool completed)> GetAllStepsForCurrentTask()
+        {
+            return sessionManager.GetStepProgress();
+        }
 
         public void ClearLabels()
         {
@@ -195,6 +216,7 @@ namespace RecognX
             {
                 sessionManager.AdvanceStep();
                 UpdateLabelsForCurrentStep();
+                EmitLocalizationProgress();
             }
 
             if (response.task_completed)
@@ -222,6 +244,17 @@ namespace RecognX
             var text = label.GetComponentInChildren<TMPro.TextMeshPro>();
             if (text != null) text.text = obj.label;
             label.transform.SetParent(labelContainer.transform, true);
+        }
+
+        public List<int> GetCurrentYoloIdsForCurrentStep()
+        {
+            return sessionManager.GetYoloIdsToFind();
+        }
+
+        public void LocateObjectsForCurrentStep(List<int> activeIds)
+        {
+            discoveryManager.LocateObjects(activeIds);
+            EmitLocalizationProgress();
         }
 
         private void UpdateLabelsForCurrentStep()
