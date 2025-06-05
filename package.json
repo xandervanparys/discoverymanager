@@ -1,6 +1,6 @@
 {
   "name": "com.xvparys.recognx",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "displayName": "RecognX",
   "description": "A Unity package for object recognition, 3D localization, and instruction tracking using YOLO and AR mesh raycasting.",
   "unity": "2022.3",
