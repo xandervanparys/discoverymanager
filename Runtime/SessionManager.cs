@@ -89,16 +89,6 @@ namespace RecognX
             }
         }
 
-        public Dictionary<int, List<LocalizedObject>> getFoundObjects()
-        {
-            return locatedObjects;
-        }
-
-        public List<LocalizedObject> getFoundObjectsAsList()
-        {
-            return locatedObjects.Values.SelectMany(list => list).ToList();
-        }
-
         public void AdvanceStep()
         {
             completedSteps.Add(currentStepIndex);
@@ -144,6 +134,57 @@ namespace RecognX
                     completed: completedSteps.Contains(step.id)
                 ))
                 .ToList();
+        }
+        
+        public Dictionary<int, (string label, int required, int found)> GetCurrentStepObjects()
+        {
+            var summary = new Dictionary<int, (string label, int required, int found)>();
+            var step = GetCurrentStep();
+            if (step == null || step.relevant_objects == null)
+                return summary;
+            
+            foreach (var obj in step.relevant_objects)
+            {
+                int yoloId = obj.yolo_class_id;
+                string label = obj.step_name;
+                int required = GetRequiredCount(yoloId);
+                int found = GetFoundCount(yoloId);
+                summary[yoloId] = (label, required, found);
+            }
+
+            return summary;
+        }
+        
+        public Dictionary<int, (string label, int required, int found)> GetAllObjectsForCurrentTask()
+        {
+            var summary = new Dictionary<int, (string label, int required, int found)>();
+            foreach (var obj in this.CurrentTask.objects)
+            {
+                int yoloId = obj.yolo_class_id;
+                if (!summary.ContainsKey(yoloId))
+                {
+                    string label = obj.step_name;
+                    int required = this.GetRequiredCount(yoloId);
+                    int found = this.GetFoundCount(yoloId);
+                    summary[yoloId] = (label, required, found);
+                }
+            }
+            return summary;
+        }
+        
+        
+        public List<int> GetAllRelevantYoloIdsForCurrentStep()
+        {
+            var result = new List<int>();
+            var step = GetCurrentStep();
+            if (step == null) return result;
+
+            foreach (var obj in step.relevant_objects)
+            {
+                result.Add(obj.yolo_class_id);
+            }
+
+            return result;
         }
     }
 }
