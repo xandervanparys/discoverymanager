@@ -1,12 +1,25 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEngine;
 
 namespace RecognX
 {
+    public interface IBackendService
+    {
+        Task<List<TaskResponse>> FetchAllTasksAsync();
+        Task<SetupResponse>    SubmitTaskAsync(string taskId);
+        Task<List<YoloDetection>> DetectObjectsAsync(Texture2D image, List<int> classIds);
+        Task<InstructionTrackingResponse> SubmitLiveFrameAsync(Texture2D image);
+    }
+    
+    public interface IDiscoveryManager
+    {
+        Task<List<LocalizedObject>> LocateObjectsAsync(List<int> activeYoloIds);
+    }
     
     [Serializable]
-    public struct LocalizedObject
+    public class LocalizedObject
     {
         public string label;
         public int yoloId;

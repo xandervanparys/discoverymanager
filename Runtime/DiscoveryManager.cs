@@ -14,7 +14,7 @@ using Unity.Collections;
 
 namespace RecognX
 {
-    public class DiscoveryManager
+    public class DiscoveryManager : IDiscoveryManager
     {
         private static ARCameraManager arCameraManager;
 
@@ -23,8 +23,6 @@ namespace RecognX
         private Camera arCamera;
 
         private BackendService backendService;
-
-        public Action<List<LocalizedObject>> OnObjectsLocalized;
 
         private Vector3 cameraPosAtCapture;
         private Quaternion cameraRotAtCapture;
@@ -47,7 +45,7 @@ namespace RecognX
             AssignARMeshLayer();
         }
 
-        public async void LocateObjects(List<int> activeYoloIds)
+        public async Task<List<LocalizedObject>> LocateObjectsAsync(List<int> activeYoloIds)
         {
             Texture2D tex = CaptureCameraTextureAsync();
             cameraPosAtCapture = arCamera.transform.position;
@@ -57,10 +55,11 @@ namespace RecognX
             foreach (var detection in detections)
                 Debug.Log(
                     $"Detected {detection.class_name} (YOLO ID: {detection.yoloId}) @ confidence {detection.confidence}");
-            HandleDetections(detections, tex.width, tex.height);
+            var results = HandleDetections(detections, tex.width, tex.height);
+            return results;
         }
 
-        private void HandleDetections(List<YoloDetection> detections, int imageWidth, int imageHeight)
+        private List<LocalizedObject> HandleDetections(List<YoloDetection> detections, int imageWidth, int imageHeight)
         {
             // TODO: Come up with a solution for this ARMesh, because I think it would be good.
             var results = new List<LocalizedObject>();
@@ -92,7 +91,7 @@ namespace RecognX
 
             foreach (var result in results)
                 Debug.Log($"Localized: {result.label} at {result.position}");
-            OnObjectsLocalized?.Invoke(results);
+            return results;
         }
 
         private void AssignARMeshLayer()

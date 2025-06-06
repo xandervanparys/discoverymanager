@@ -60,7 +60,7 @@ namespace RecognX
             OnTaskStateChanged?.Invoke(currentState);
         }
 
-        public void startTracking()
+        public void StartTracking()
         {
             SetState(TaskState.Tracking);
             Debug.Log($"[RecognX] State changed to: {CurrentState}");
@@ -90,7 +90,6 @@ namespace RecognX
 
             sessionManager = new SessionManager();
             discoveryManager = new DiscoveryManager(arCameraManager, arMeshManager, arCamera, backendService);
-            discoveryManager.OnObjectsLocalized += HandleObjectsLocalized;
 
             if (useBuiltInLabelRenderer)
             {
@@ -135,10 +134,11 @@ namespace RecognX
             OnLocalizationProgressUpdated?.Invoke(summary);
         }
 
-        public void CaptureAndLocalize()
+        public async Task CaptureAndLocalize()
         {
             var activeIds = sessionManager.GetYoloIdsToFind();
-            discoveryManager.LocateObjects(activeIds);
+            var objects = await discoveryManager.LocateObjectsAsync(activeIds);
+            HandleObjectsLocalized(objects);
         }
 
         private void HandleObjectsLocalized(List<LocalizedObject> objects)

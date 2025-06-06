@@ -5,7 +5,7 @@ using UnityEngine.Networking;
 
 namespace RecognX
 {
-    public class BackendService
+    public class BackendService : IBackendService
     {
         private const string BaseUrl = "https://api.web-present.be";
 
