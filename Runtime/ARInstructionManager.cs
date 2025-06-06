@@ -43,6 +43,7 @@ namespace RecognX
 
         [Header("Object Labeling")] [SerializeField]
         private GameObject labelPrefab;
+        [SerializeField] float labelYOffset = 0.1f;
 
         private GameObject labelContainer;
 
@@ -130,13 +131,22 @@ namespace RecognX
 
         private void EmitLocalizationProgress()
         {
-            var summary = sessionManager.GetCurrentStepObjects();
+            Dictionary<int, (string label, int requiredCount, int foundCount)> summary;
+            if (currentState == TaskState.TaskSummary)
+            {
+                summary = sessionManager.GetAllObjectsForCurrentTask();
+            }
+            else
+            {
+                summary = sessionManager.GetCurrentStepObjects();
+            }
             OnLocalizationProgressUpdated?.Invoke(summary);
         }
 
         public async Task CaptureAndLocalize()
         {
-            var activeIds = sessionManager.GetYoloIdsToFind();
+            var activeIds = sessionManager.GetAllRelevantYoloIdsForCurrentStep();
+            Debug.Log(activeIds);
             var objects = await discoveryManager.LocateObjectsAsync(activeIds);
             HandleObjectsLocalized(objects);
         }
@@ -219,7 +229,7 @@ namespace RecognX
 
         private void placeLabel(LocalizedObject obj)
         {
-            GameObject label = Instantiate(labelPrefab, obj.position, Quaternion.identity);
+            GameObject label = Instantiate(labelPrefab, obj.position+ new Vector3(0f, labelYOffset, 0f), Quaternion.identity);
             var text = label.GetComponentInChildren<TMPro.TextMeshPro>();
             if (text != null) text.text = obj.label;
             label.transform.SetParent(labelContainer.transform, true);
