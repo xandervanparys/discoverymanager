@@ -43,6 +43,8 @@ namespace RecognX
 
         [Header("Object Labeling")] [SerializeField]
         private GameObject labelPrefab;
+        // Track instantiated labels by YOLO ID
+        private readonly Dictionary<int, GameObject> placedLabels = new Dictionary<int, GameObject>();
         [SerializeField] float labelYOffset = 0.1f;
 
         private GameObject labelContainer;
@@ -95,6 +97,8 @@ namespace RecognX
             if (useBuiltInLabelRenderer)
             {
                 labelContainer = new GameObject("RecognX_Labels");
+                placedLabels.Clear();
+
                 labelPrefab = Resources.Load<GameObject>("Label3D");
                 if (labelPrefab == null)
                 {
@@ -158,25 +162,42 @@ namespace RecognX
             {
                 Debug.Log($"🔍 Evaluating object: {obj.label} (YOLO ID: {obj.yoloId})");
 
-                bool isRelevantForStep = sessionManager.GetAllRelevantYoloIdsForCurrentStep().Contains(obj.yoloId);
-                bool shouldShow = sessionManager.MarkYoloObjectFound(obj) && isRelevantForStep;                Debug.Log($"✅ Marked object found: {shouldShow}");
+                // Only consider objects relevant to the current step
+                if (!sessionManager.GetAllRelevantYoloIdsForCurrentStep().Contains(obj.yoloId))
+                    continue;
 
                 if (!useBuiltInLabelRenderer)
                 {
                     Debug.Log("⚠️ Label rendering is disabled (useBuiltInLabelRenderer == false)");
+                    continue;
                 }
 
-                if (!shouldShow)
+                // If a label already exists for this ID, move it
+                if (placedLabels.TryGetValue(obj.yoloId, out var existingLabel))
                 {
-                    Debug.Log("⚠️ Object already fully found, skipping label placement");
+                    existingLabel.transform.position = obj.position + new Vector3(0f, labelYOffset, 0f);
+                    continue;
                 }
 
-                if (!useBuiltInLabelRenderer || !shouldShow) continue;
-
-                Debug.Log("🏷 Placing label...");
-                placeLabel(obj);
-                EmitLocalizationProgress();
+                // Otherwise, mark found and create a new label
+                if (sessionManager.MarkYoloObjectFound(obj))
+                {
+                    Debug.Log("🏷 Placing new label...");
+                    var label = Instantiate(
+                        labelPrefab,
+                        obj.position + new Vector3(0f, labelYOffset, 0f),
+                        Quaternion.identity);
+                    var textComponent = label.GetComponentInChildren<TMPro.TextMeshPro>();
+                    if (textComponent != null)
+                        textComponent.text = obj.label;
+                    label.transform.SetParent(labelContainer.transform, true);
+                    placedLabels[obj.yoloId] = label;
+                }
             }
+
+            // Refresh UI after relocating/placing labels
+            EmitLocalizationProgress();
+            OnRelevantObjectsUpdated?.Invoke(sessionManager.GetCurrentStepObjects());
         }
         
         public List<(int stepId, string description, bool completed)> GetAllStepsForCurrentTask()
@@ -190,6 +211,7 @@ namespace RecognX
                 Destroy(labelContainer);
 
             labelContainer = new GameObject("RecognX_Labels");
+            placedLabels.Clear();
         }
 
         public async Task TrackStepAsync()
