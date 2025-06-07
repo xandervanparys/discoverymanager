@@ -53,31 +53,41 @@ namespace RecognX
             if (!locatedObjects.ContainsKey(yoloId))
                 locatedObjects[yoloId] = new List<LocalizedObject>();
 
-            if (locatedObjects[yoloId].Count >= requiredYoloCounts[yoloId])
-                return false;
+            int required = requiredYoloCounts[yoloId];
+            var list = locatedObjects[yoloId];
 
-            locatedObjects[yoloId].Add(obj);
+            if (list.Count >= required)
+            {
+                // Update stored positions for already-found objects
+                for (int i = 0; i < list.Count; i++)
+                {
+                    if (list[i].yoloId == yoloId)
+                        list[i] = obj;
+                }
+                return false;
+            }
+
+            list.Add(obj);
 
             return true;
         }
 
         public List<int> GetYoloIdsToFind()
         {
-            HashSet<int> toFind = new();
+            var step = GetCurrentStep();
+            if (step == null || step.relevant_objects == null)
+                return new List<int>();
 
-            foreach (KeyValuePair<int, int> kv in requiredYoloCounts)
+            var toFind = new List<int>();
+            foreach (var obj in step.relevant_objects)
             {
-                int yoloId = kv.Key;
-                int requiredCount = kv.Value;
-
-                int foundCount = locatedObjects.ContainsKey(yoloId) ? locatedObjects[yoloId].Count : 0;
-                if (requiredCount > foundCount)
-                {
+                int yoloId = obj.yolo_class_id;
+                int required = GetRequiredCount(yoloId);
+                int found = GetFoundCount(yoloId);
+                if (found < required)
                     toFind.Add(yoloId);
-                }
             }
-
-            return toFind.ToList();
+            return toFind;
         }
 
         public IEnumerable<LocalizedObject> GetAllActiveLocalizedObjects()

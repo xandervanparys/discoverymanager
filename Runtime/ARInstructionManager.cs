@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -21,7 +22,8 @@ namespace RecognX
 
         public event Action<List<TaskResponse>> OnTasksLoaded;
         public event Action<InstructionTrackingResponse> OnInstructionFeedback;
-        public event Action<Dictionary<int, (string label, int requiredCount, int foundCount)>> 
+
+        public event Action<Dictionary<int, (string label, int requiredCount, int foundCount)>>
             OnRelevantObjectsUpdated;
 
         public event Action<Dictionary<int, (string label, int requiredCount, int foundCount)>>
@@ -43,9 +45,35 @@ namespace RecognX
 
         [Header("Object Labeling")] [SerializeField]
         private GameObject labelPrefab;
+
         // Track instantiated labels by YOLO ID
         private readonly Dictionary<int, GameObject> placedLabels = new Dictionary<int, GameObject>();
         [SerializeField] float labelYOffset = 0.1f;
+
+        [Header("Auto-Scan")] [Tooltip("Automatically re-run Locate every interval when tracking.")] [SerializeField]
+        private bool autoScanEnabled = false;
+
+        [SerializeField] private float autoScanInterval = 2f;
+
+        /// <summary>
+        /// Whether auto-scan is enabled during Tracking.
+        /// </summary>
+        public bool AutoScanEnabled
+        {
+            get => autoScanEnabled;
+            set => autoScanEnabled = value;
+        }
+
+        /// <summary>
+        /// Interval in seconds between automatic scans.
+        /// </summary>
+        public float AutoScanInterval
+        {
+            get => autoScanInterval;
+            set => autoScanInterval = value;
+        }
+
+        private Coroutine autoScanCoroutine;
 
         private GameObject labelContainer;
 
@@ -55,12 +83,19 @@ namespace RecognX
 
         private TaskState currentState = TaskState.Idle;
 
+
         private void SetState(TaskState newState)
         {
             if (currentState == newState) return;
             currentState = newState;
             Debug.Log($"[RecognX] State changed to: {newState}");
             OnTaskStateChanged?.Invoke(currentState);
+
+            // Manage auto-scan coroutine when entering or leaving Tracking
+            if (currentState == TaskState.Tracking && autoScanEnabled)
+                StartAutoScan();
+            else
+                StopAutoScan();
         }
 
         public void StartTracking()
@@ -144,6 +179,7 @@ namespace RecognX
             {
                 summary = sessionManager.GetCurrentStepObjects();
             }
+
             OnLocalizationProgressUpdated?.Invoke(summary);
         }
 
@@ -172,26 +208,16 @@ namespace RecognX
                     continue;
                 }
 
-                // If a label already exists for this ID, move it
-                if (placedLabels.TryGetValue(obj.yoloId, out var existingLabel))
-                {
-                    existingLabel.transform.position = obj.position + new Vector3(0f, labelYOffset, 0f);
-                    continue;
-                }
-
                 // Otherwise, mark found and create a new label
                 if (sessionManager.MarkYoloObjectFound(obj))
                 {
                     Debug.Log("🏷 Placing new label...");
-                    var label = Instantiate(
-                        labelPrefab,
-                        obj.position + new Vector3(0f, labelYOffset, 0f),
-                        Quaternion.identity);
-                    var textComponent = label.GetComponentInChildren<TMPro.TextMeshPro>();
-                    if (textComponent != null)
-                        textComponent.text = obj.label;
-                    label.transform.SetParent(labelContainer.transform, true);
-                    placedLabels[obj.yoloId] = label;
+                    placeLabel(obj);
+                }
+                // If a label already exists for this ID, move it
+                else if (placedLabels.TryGetValue(obj.yoloId, out var existingLabel))
+                {
+                    existingLabel.transform.position = obj.position + new Vector3(0f, labelYOffset, 0f);
                 }
             }
 
@@ -199,7 +225,7 @@ namespace RecognX
             EmitLocalizationProgress();
             OnRelevantObjectsUpdated?.Invoke(sessionManager.GetCurrentStepObjects());
         }
-        
+
         public List<(int stepId, string description, bool completed)> GetAllStepsForCurrentTask()
         {
             return sessionManager.GetStepProgress();
@@ -237,6 +263,11 @@ namespace RecognX
             else if (response.step_completed)
             {
                 SetState(TaskState.Tracking);
+                if (autoScanEnabled)
+                {
+                    StopAutoScan();
+                    StartAutoScan();
+                }
             }
 
             OnInstructionFeedback?.Invoke(response);
@@ -251,10 +282,12 @@ namespace RecognX
 
         private void placeLabel(LocalizedObject obj)
         {
-            GameObject label = Instantiate(labelPrefab, obj.position+ new Vector3(0f, labelYOffset, 0f), Quaternion.identity);
+            GameObject label = Instantiate(labelPrefab, obj.position + new Vector3(0f, labelYOffset, 0f),
+                Quaternion.identity);
             var text = label.GetComponentInChildren<TMPro.TextMeshPro>();
             if (text != null) text.text = obj.label;
             label.transform.SetParent(labelContainer.transform, true);
+            placedLabels.Add(obj.yoloId, label);
         }
 
         private void UpdateLabelsForCurrentStep()
@@ -274,6 +307,32 @@ namespace RecognX
             sessionManager.Reset();
             ClearLabels();
             SetState(TaskState.Idle);
+        }
+
+        private void StartAutoScan()
+        {
+            StopAutoScan();
+            autoScanCoroutine = StartCoroutine(AutoScanRoutine());
+        }
+
+        private void StopAutoScan()
+        {
+            if (autoScanCoroutine != null)
+            {
+                StopCoroutine(autoScanCoroutine);
+                autoScanCoroutine = null;
+            }
+        }
+
+        private IEnumerator AutoScanRoutine()
+        {
+            while (currentState == TaskState.Tracking &&
+                   sessionManager.GetYoloIdsToFind().Count > 0)
+            {
+                // Fire off locate; we don't await here
+                _ = CaptureAndLocalize();
+                yield return new WaitForSeconds(autoScanInterval);
+            }
         }
     }
 }
