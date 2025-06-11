@@ -185,9 +185,12 @@ namespace RecognX
 
         public async Task CaptureAndLocalize()
         {
+            float startTime = Time.realtimeSinceStartup;
             var activeIds = sessionManager.GetAllRelevantYoloIdsForCurrentStep();
             Debug.Log(activeIds);
             var objects = await discoveryManager.LocateObjectsAsync(activeIds);
+            float totalDuration = Time.realtimeSinceStartup - startTime;
+            Debug.Log($"[Latency] CaptureAndLocalize total {totalDuration * 1000f} ms");
             HandleObjectsLocalized(objects);
         }
 
@@ -242,10 +245,16 @@ namespace RecognX
 
         public async Task TrackStepAsync()
         {
+            float startTime = Time.realtimeSinceStartup;
             var cameraTexture = DiscoveryManager.CaptureCameraTextureAsync();
+            float backendStart = Time.realtimeSinceStartup;
             var response = await backendService.SubmitLiveFrameAsync(cameraTexture);
+            float backendDuration = Time.realtimeSinceStartup - backendStart;
+            Debug.Log($"[Latency] SubmitLiveFrameAsync took {backendDuration * 1000f} ms");
 
+            float totalDuration = Time.realtimeSinceStartup - startTime;
             Debug.Log($"📩 GPT Feedback: {response.response}");
+            Debug.Log($"[Latency] TrackStepAsync total {totalDuration * 1000f} ms");
             Debug.Log(
                 $"🧭 Step: {response.step_number} | ✅ Completed: {response.step_completed} | 🎯 Task Done: {response.task_completed}");
 

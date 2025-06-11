@@ -47,15 +47,27 @@ namespace RecognX
 
         public async Task<List<LocalizedObject>> LocateObjectsAsync(List<int> activeYoloIds)
         {
+            float startTime = Time.realtimeSinceStartup;
             Texture2D tex = CaptureCameraTextureAsync();
             cameraPosAtCapture = arCamera.transform.position;
             cameraRotAtCapture = arCamera.transform.rotation;
 
+            float backendStart = Time.realtimeSinceStartup;
             List<YoloDetection> detections = await backendService.DetectObjectsAsync(tex, activeYoloIds);
+            float backendDuration = Time.realtimeSinceStartup - backendStart;
+            Debug.Log($"[Latency] DetectObjectsAsync took {backendDuration * 1000f} ms");
+
             foreach (var detection in detections)
                 Debug.Log(
                     $"Detected {detection.class_name} (YOLO ID: {detection.yoloId}) @ confidence {detection.confidence}");
+
+            float raycastStart = Time.realtimeSinceStartup;
             var results = HandleDetections(detections, tex.width, tex.height);
+            float raycastDuration = Time.realtimeSinceStartup - raycastStart;
+            Debug.Log($"[Latency] Raycasting took {raycastDuration * 1000f} ms");
+
+            float totalDuration = Time.realtimeSinceStartup - startTime;
+            Debug.Log($"[Latency] LocateObjectsAsync total {totalDuration * 1000f} ms");
             return results;
         }
 
